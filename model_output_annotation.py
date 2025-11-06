@@ -42,7 +42,7 @@ order = list(df.index)
 random.shuffle(order)
 
 st.title("Human Evaluation Task")
-st.info("Select a bucket for the Left Passage. The Right Passage will automatically get the opposite bucket. Press 'Next' to advance or 'Exit' to save progress and leave.")
+st.info("Assign each passage to a bucket. Selecting one automatically flips the other. Press 'Next' to advance or 'Exit' to save progress and leave.")
 
 i = st.session_state.i
 if i >= len(order):
@@ -57,29 +57,29 @@ passage_right = row["passage_b"] if not flip else row["passage_a"]
 st.markdown(f"### Example {i+1} of {len(order)}")
 
 col1, col2 = st.columns(2)
+
 with col1:
     st.markdown("#### Left Passage")
     st.write(passage_left)
-    bucket_choice = st.radio("Assign to bucket:", ["Bucket 1", "Bucket 2"], horizontal=True)
+    left_bucket = st.radio("Select bucket for Left Passage:", ["Bucket 1", "Bucket 2"], key="left_bucket", horizontal=True)
 
 with col2:
     st.markdown("#### Right Passage")
     st.write(passage_right)
-    st.markdown("_Automatically assigned the opposite bucket_")
+    # Flip automatically
+    right_bucket = "Bucket 2" if left_bucket == "Bucket 1" else "Bucket 1"
+    st.radio("Bucket for Right Passage (auto):", [right_bucket], index=0, disabled=True, key="right_bucket", horizontal=True)
 
 if st.button("Next"):
-    if not bucket_choice:
-        st.warning("Please select a bucket for the Left Passage before advancing.")
+    if not left_bucket:
+        st.warning("Please select a bucket for one passage before advancing.")
     else:
-        final_left = bucket_choice
-        final_right = "Bucket 2" if bucket_choice == "Bucket 1" else "Bucket 1"
-
         new_row = {
             "timestamp": datetime.now().isoformat(),
             "annotator": annotator,
             "pair_id": row["id"],
-            "left_passage_bucket": final_left,
-            "right_passage_bucket": final_right,
+            "left_passage_bucket": left_bucket,
+            "right_passage_bucket": right_bucket,
         }
 
         df_new = pd.DataFrame([new_row])
