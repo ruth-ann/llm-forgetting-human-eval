@@ -16,7 +16,7 @@ if "annotator" not in st.session_state:
     name = st.text_input("Please enter your name or code:")
     if not name:
         st.stop()
-    annotator = "".join(name.split())[:8]  # first 8 characters, no spaces
+    annotator = "".join(name.split())[:8]
     st.session_state.annotator = annotator
 annotator = st.session_state.annotator
 
@@ -36,7 +36,6 @@ if i >= len(order):
     st.stop()
 
 row = df.loc[order[i]]
-
 flip = random.choice([True, False])
 passage_left = row["passage_a"] if not flip else row["passage_b"]
 passage_right = row["passage_b"] if not flip else row["passage_a"]
@@ -56,37 +55,34 @@ choice = st.radio("Which passage is better?", ["Left", "Right", "Same quality"],
 if st.button("Next"):
     if not choice:
         st.warning("Please select an option before proceeding.")
+        st.stop()
+
+    if choice == "Left":
+        final_choice = "A" if not flip else "B"
+    elif choice == "Right":
+        final_choice = "B" if not flip else "A"
     else:
-        if choice == "Left":
-            final_choice = "A" if not flip else "B"
-        elif choice == "Right":
-            final_choice = "B" if not flip else "A"
-        else:
-            final_choice = "Same quality"
+        final_choice = "Same quality"
 
-        new_row = {
-            "timestamp": datetime.now().isoformat(),
-            "annotator": annotator,
-            "pair_id": row["id"],
-            "choice": final_choice,
-        }
+    new_row = {
+        "timestamp": datetime.now().isoformat(),
+        "annotator": annotator,
+        "pair_id": row["id"],
+        "choice": final_choice,
+    }
 
-        df_new = pd.DataFrame([new_row])
-        file_path = f"results/{annotator}_responses.csv"
+    df_new = pd.DataFrame([new_row])
+    file_path = f"results/{annotator}_responses.csv"
 
-        try:
-            g = Github(st.secrets["GITHUB_TOKEN"])
-            repo = g.get_repo(st.secrets["REPO_NAME"])
+    g = Github(st.secrets["GITHUB_TOKEN"])
+    repo = g.get_repo(st.secrets["REPO_NAME"])
 
-            try:
-                repo_file = repo.get_contents(file_path)
-                repo.update_file(file_path, f"Update {annotator} responses", df_new.to_csv(index=False), repo_file.sha)
-            except:
-                repo.create_file(file_path, f"Add {annotator} responses", df_new.to_csv(index=False))
+    try:
+        repo_file = repo.get_contents(file_path)
+        repo.update_file(file_path, f"Update {annotator} responses", df_new.to_csv(index=False), repo_file.sha)
+    except:
+        repo.create_file(file_path, f"Add {annotator} responses", df_new.to_csv(index=False))
 
-            st.session_state.i += 1
-            st.experimental_rerun()
-
-        except Exception as e:
-            st.error(f"Failed to save data to GitHub: {e}")
+    st.session_state.i += 1
+    st.stop()
 
