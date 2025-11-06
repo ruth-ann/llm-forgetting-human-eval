@@ -62,7 +62,6 @@ st.markdown(f"### Example {i+1} of {len(order)}")
 
 col1, col2 = st.columns(2)
 
-# Use session state to keep selections synced
 if "left_bucket" not in st.session_state:
     st.session_state.left_bucket = None
 if "right_bucket" not in st.session_state:
@@ -88,7 +87,7 @@ with col2:
         key="right_radio"
     )
 
-# Sync the selections: changing one flips the other automatically
+# Sync selections: changing one flips the other
 if left_bucket != st.session_state.left_bucket:
     st.session_state.left_bucket = left_bucket
     st.session_state.right_bucket = "Bucket 2" if left_bucket == "Bucket 1" else "Bucket 1"
@@ -113,10 +112,11 @@ if st.button("Next"):
         file_path = f"results/{annotator}_responses.csv"
         df_new.to_csv(file_path, mode="a", header=not os.path.exists(file_path), index=False)
 
+        # Advance manually without rerun
         st.session_state.i += 1
         st.session_state.left_bucket = None
         st.session_state.right_bucket = None
-        st.experimental_rerun()
+        st.experimental_rerun = None  # ensure no rerun is called
 
 if st.button("Exit and continue later"):
     st.success("Progress saved. You can return later to continue.")
