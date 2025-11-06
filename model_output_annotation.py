@@ -64,5 +64,29 @@ with col1:
 with col2:
     st.markdown("#### Right Passage")
     st.write(passage_right)
-    st.markdown("_Automatically assigned based on Left Passage selection_
+    st.markdown("_Automatically assigned based on Left Passage selection_")
+
+def save_and_advance(annotator, pair_id, left_bucket, right_bucket):
+    new_row = {
+        "timestamp": datetime.now().isoformat(),
+        "annotator": annotator,
+        "pair_id": pair_id,
+        "left_passage_bucket": left_bucket,
+        "right_passage_bucket": right_bucket,
+    }
+
+    df_new = pd.DataFrame([new_row])
+    file_path = f"results/{annotator}_responses.csv"
+
+    g = Github(st.secrets["GITHUB_TOKEN"])
+    repo = g.get_repo(st.secrets["REPO_NAME"])
+
+    try:
+        repo_file = repo.get_contents(file_path)
+        repo.update_file(file_path, f"Update {annotator} responses", df_new.to_csv(index=False), repo_file.sha)
+    except:
+        repo.create_file(file_path, f"Add {annotator} responses", df_new.to_csv(index=False))
+
+    st.session_state.i += 1
+    st.stop()
 
