@@ -12,126 +12,110 @@ def load_data():
 
 df = load_data()
 
-def start_session():
-    name = st.session_state.name_input
-    if name:
-        st.session_state.annotator = "".join(name.split())[:8]
-        existing_file = f"results/{st.session_state.annotator}_responses.csv"
-        if os.path.exists(existing_file) and os.path.getsize(existing_file) > 0:
-            try:
-                prev_df = pd.read_csv(existing_file)
-                st.session_state.i = len(prev_df)
-                st.session_state.history = prev_df.to_dict('records')
-            except pd.errors.ParserError:
-                st.session_state.i = 0
-                st.session_state.history = []
-        else:
-            st.session_state.i = 0
-            st.session_state.history = []
-
+# initialize session state
 if "annotator" not in st.session_state:
-    st.text_input(
-        "Enter your name or code and press Enter:",
-        key="name_input",
-        on_change=start_session
-    )
-    if "annotator" not in st.session_state:
-        st.stop()
-
-annotator = st.session_state.annotator
-
+    st.session_state.annotator = None
 if "i" not in st.session_state:
     st.session_state.i = 0
 if "history" not in st.session_state:
     st.session_state.history = []
+if "left_bucket" not in st.session_state:
+    st.session_state.left_bucket = None
+if "right_bucket" not in st.session_state:
+    st.session_state.right_bucket = None
 
-random.seed(annotator)
-order = list(df.index)
-random.shuffle(order)
+# enter name
+if not st.session_state.annotator:
+    name = st.text_input("Enter your name or code and press Enter:")
+    if name:
+        st.session_state.annotator = "".join(name.split())[:8]
+    else:
+        st.stop()
 
-st.title("Human Evaluation Task")
-st.info("Select a bucket for either passage. The other flips automatically. Press 'Next' to advance, 'Back' to go back, or 'Exit' to save progress.")
+annotator = st.session_state.annotator
+
+# shuffle order once per annotator
+if "order" not in st.session_state:
+    random.seed(annotator)
+    st.session_state.order = list(df.index)
+    random.shuffle(st.session_state.order)
 
 i = st.session_state.i
-if i >= len(order):
+if i >= len(df):
     st.success("✅ You’ve completed all evaluations. Thank you!")
     st.stop()
 
-row = df.loc[order[i]]
+row = df.loc[st.session_state.order[i]]
 flip = random.choice([True, False])
 passage_left = row["passage_a"] if not flip else row["passage_b"]
 passage_right = row["passage_b"] if not flip else row["passage_a"]
 
-st.markdown(f"### Example {i+1} of {len(order)}")
+st.title("Human Evaluation Task")
+st.info("Select a bucket for either passage. The other flips automatically. Press 'Next' to advance, 'Back' to go back, or 'Exit' to save progress.")
 
 col1, col2 = st.columns(2)
 
-if "selection" not in st.session_state:
-    st.session_state.selection = None
-if "bucket_choice" not in st.session_state:
-    st.session_state.bucket_choice = None
-
-# compute indexes for radios before rendering
-if st.session_state.selection == "left":
-    left_index = 0 if st.session_state.bucket_choice == "Bucket 1" else 1
-    right_index = 1 - left_index
-elif st.session_state.selection == "right":
-    right_index = 0 if st.session_state.bucket_choice == "Bucket 1" else 1
-    left_index = 1 - right_index
-else:
-    left_index = 0
-    right_index = 1
+def sync_buckets():
+    if st.session_state.left_bucket == "Bucket 1":
+        st.session_state.right_bucket = "Bucket 2"
+    elif st.session_state.left_bucket == "Bucket 2":
+        st.session_state.right_bucket = "Bucket 1"
+    elif st.session_state.right_bucket == "Bucket 1":
+        st.session_state.left_bucket = "Bucket 2"
+    elif st.session_state.right_bucket == "Bucket 2":
+        st.session_state.left_bucket = "Bucket 1"
 
 with col1:
     st.markdown("#### Left Passage")
     st.write(passage_left)
-    left_bucket = st.radio("Left Passage Bucket:", ["Bucket 1", "Bucket 2"], index=left_index, key="left_radio")
+    left = st.radio("Left Passage Bucket:", ["Bucket 1", "Bucket 2"],
+                    index=0 if st.session_state.left_bucket == "Bucket 1" else 1 if st.session_state.left_bucket == "Bucket 2" else 0,
+                    key="left_radio")
+    st.session_state.left_bucket = left
+    sync_buckets()
 
 with col2:
     st.markdown("#### Right Passage")
     st.write(passage_right)
-    right_bucket = st.radio("Right Passage Bucket:", ["Bucket 1", "Bucket 2"], index=right_index, key="right_radio")
+    right = st.radio("Right Passage Bucket:", ["Bucket 1", "Bucket 2"],
+                     index=0 if st.session_state.right_bucket == "Bucket 1" else 1 if st.session_state.right_bucket == "Bucket 2" else 1,
+                     key="right_radio")
+    st.session_state.right_bucket = right
+    sync_buckets()
 
-# update session_state immediately on selection
-if left_bucket != ("Bucket 1" if left_index == 0 else "Bucket 2"):
-    st.session_state.selection = "left"
-    st.session_state.bucket_choice = left_bucket
-elif right_bucket != ("Bucket 1" if right_index == 0 else "Bucket 2"):
-    st.session_state.selection = "right"
-    st.session_state.bucket_choice = right_bucket
-
-def save_and_advance():
+def save_progress():
     new_row = {
         "timestamp": datetime.now().isoformat(),
         "annotator": annotator,
         "pair_id": row["id"],
-        "left_passage_bucket": st.session_state.bucket_choice if st.session_state.selection == "left" else ("Bucket 2" if st.session_state.bucket_choice == "Bucket 1" else "Bucket 1"),
-        "right_passage_bucket": st.session_state.bucket_choice if st.session_state.selection == "right" else ("Bucket 2" if st.session_state.bucket_choice == "Bucket 1" else "Bucket 1"),
+        "left_passage_bucket": st.session_state.left_bucket,
+        "right_passage_bucket": st.session_state.right_bucket
     }
     st.session_state.history.append(new_row)
-    df_new = pd.DataFrame([new_row])
     os.makedirs("results", exist_ok=True)
     file_path = f"results/{annotator}_responses.csv"
-    df_new.to_csv(file_path, mode="a", header=not os.path.exists(file_path), index=False)
-    st.session_state.i += 1
-    st.session_state.selection = None
-    st.session_state.bucket_choice = None
+    pd.DataFrame([new_row]).to_csv(file_path, mode="a", header=not os.path.exists(file_path), index=False)
 
-if st.button("Next"):
-    if not st.session_state.bucket_choice:
-        st.warning("Please select a bucket for one passage before advancing.")
-    else:
-        save_and_advance()
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("Back"):
+        if st.session_state.i > 0:
+            st.session_state.i -= 1
+            if st.session_state.history:
+                last = st.session_state.history.pop()
+                st.session_state.left_bucket = last["left_passage_bucket"]
+                st.session_state.right_bucket = last["right_passage_bucket"]
 
-if st.button("Back"):
-    if st.session_state.i > 0:
-        st.session_state.i -= 1
-        if st.session_state.history:
-            st.session_state.history.pop()
-        st.session_state.selection = None
-        st.session_state.bucket_choice = None
+with col2:
+    if st.button("Next"):
+        if st.session_state.left_bucket and st.session_state.right_bucket:
+            save_progress()
+            st.session_state.i += 1
+            st.session_state.left_bucket = None
+            st.session_state.right_bucket = None
 
-if st.button("Exit and continue later"):
-    st.success("Progress saved. You can return later to continue.")
-    st.stop()
+with col3:
+    if st.button("Exit and continue later"):
+        st.success("Progress saved. You can return later to continue.")
+        st.stop()
 
