@@ -3,6 +3,7 @@ import pandas as pd
 import random
 from datetime import datetime
 from github import Github
+import os
 
 st.set_page_config(page_title="Human Evaluation", layout="wide")
 
@@ -13,13 +14,17 @@ def load_data():
 df = load_data()
 
 if "annotator" not in st.session_state:
-    name = st.text_input("Please enter your name or code:")
+    name = st.text_input("Please enter your name or code and press Enter:")
     if not name:
         st.stop()
-    if st.button("Start"):
-        st.session_state.annotator = "".join(name.split())[:8]
+    st.session_state.annotator = "".join(name.split())[:8]
+    # check if previous progress exists
+    existing_file = f"results/{st.session_state.annotator}_responses.csv"
+    if os.path.exists(existing_file):
+        prev_df = pd.read_csv(existing_file)
+        st.session_state.i = len(prev_df)
+    else:
         st.session_state.i = 0
-        st.experimental_rerun()  # Only needed for first page initialization
     st.stop()
 
 annotator = st.session_state.annotator
@@ -32,7 +37,7 @@ order = list(df.index)
 random.shuffle(order)
 
 st.title("Human Evaluation Task")
-st.info("Select a bucket for the Left Passage. The Right Passage will automatically get the opposite bucket. Press 'Next' to advance.")
+st.info("Select a bucket for the Left Passage. The Right Passage will automatically get the opposite bucket. Press 'Next' to advance or 'Exit' to save progress and leave.")
 
 i = st.session_state.i
 if i >= len(order):
@@ -60,31 +65,27 @@ with col2:
 if st.button("Next"):
     if not bucket_choice:
         st.warning("Please select a bucket for the Left Passage before advancing.")
-        st.stop()
+    else:
+        final_left = bucket_choice
+        final_right = "Bucket 2" if bucket_choice == "Bucket 1" else "Bucket 1"
 
-    final_left = bucket_choice
-    final_right = "Bucket 2" if bucket_choice == "Bucket 1" else "Bucket 1"
+        new_row = {
+            "timestamp": datetime.now().isoformat(),
+            "annotator": annotator,
+            "pair_id": row["id"],
+            "left_passage_bucket": final_left,
+            "right_passage_bucket": final_right,
+        }
 
-    new_row = {
-        "timestamp": datetime.now().isoformat(),
-        "annotator": annotator,
-        "pair_id": row["id"],
-        "left_passage_bucket": final_left,
-        "right_passage_bucket": final_right,
-    }
+        df_new = pd.DataFrame([new_row])
+        os.makedirs("results", exist_ok=True)
+        file_path = f"results/{annotator}_responses.csv"
+        # append if exists
+        df_new.to_csv(file_path, mode="a", header=not os.path.exists(file_path), index=False)
 
-    df_new = pd.DataFrame([new_row])
-    file_path = f"results/{annotator}_responses.csv"
+        st.session_state.i += 1
 
-    g = Github(st.secrets["GITHUB_TOKEN"])
-    repo = g.get_repo(st.secrets["REPO_NAME"])
-
-    try:
-        repo_file = repo.get_contents(file_path)
-        repo.update_file(file_path, f"Update {annotator} responses", df_new.to_csv(index=False), repo_file.sha)
-    except:
-        repo.create_file(file_path, f"Add {annotator} responses", df_new.to_csv(index=False))
-
-    st.session_state.i += 1
+if st.button("Exit and continue later"):
+    st.success("Progress saved. You can return later to continue.")
     st.stop()
 
