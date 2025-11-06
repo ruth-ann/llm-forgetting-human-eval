@@ -30,7 +30,11 @@ def start_session():
             st.session_state.history = []
 
 if "annotator" not in st.session_state:
-    st.text_input("Please enter your name or code and press Enter:", key="name_input", on_change=start_session)
+    st.text_input(
+        "Enter your name or code and press Enter:",
+        key="name_input",
+        on_change=start_session
+    )
     if "annotator" not in st.session_state:
         st.stop()
 
@@ -46,7 +50,7 @@ order = list(df.index)
 random.shuffle(order)
 
 st.title("Human Evaluation Task")
-st.info("Assign each passage to a bucket. Selecting one flips the other. Press 'Next' to advance, 'Back' to go to previous example, or 'Exit' to save and leave.")
+st.info("Select a bucket for either passage. The other flips automatically. Press 'Next' to advance, 'Back' to go back, or 'Exit' to save progress.")
 
 i = st.session_state.i
 if i >= len(order):
@@ -67,6 +71,7 @@ if "selection" not in st.session_state:
 if "bucket_choice" not in st.session_state:
     st.session_state.bucket_choice = None
 
+# compute indexes for radios before rendering
 if st.session_state.selection == "left":
     left_index = 0 if st.session_state.bucket_choice == "Bucket 1" else 1
     right_index = 1 - left_index
@@ -87,6 +92,7 @@ with col2:
     st.write(passage_right)
     right_bucket = st.radio("Right Passage Bucket:", ["Bucket 1", "Bucket 2"], index=right_index, key="right_radio")
 
+# update session_state immediately on selection
 if left_bucket != ("Bucket 1" if left_index == 0 else "Bucket 2"):
     st.session_state.selection = "left"
     st.session_state.bucket_choice = left_bucket
@@ -94,25 +100,28 @@ elif right_bucket != ("Bucket 1" if right_index == 0 else "Bucket 2"):
     st.session_state.selection = "right"
     st.session_state.bucket_choice = right_bucket
 
+def save_and_advance():
+    new_row = {
+        "timestamp": datetime.now().isoformat(),
+        "annotator": annotator,
+        "pair_id": row["id"],
+        "left_passage_bucket": st.session_state.bucket_choice if st.session_state.selection == "left" else ("Bucket 2" if st.session_state.bucket_choice == "Bucket 1" else "Bucket 1"),
+        "right_passage_bucket": st.session_state.bucket_choice if st.session_state.selection == "right" else ("Bucket 2" if st.session_state.bucket_choice == "Bucket 1" else "Bucket 1"),
+    }
+    st.session_state.history.append(new_row)
+    df_new = pd.DataFrame([new_row])
+    os.makedirs("results", exist_ok=True)
+    file_path = f"results/{annotator}_responses.csv"
+    df_new.to_csv(file_path, mode="a", header=not os.path.exists(file_path), index=False)
+    st.session_state.i += 1
+    st.session_state.selection = None
+    st.session_state.bucket_choice = None
+
 if st.button("Next"):
     if not st.session_state.bucket_choice:
         st.warning("Please select a bucket for one passage before advancing.")
     else:
-        new_row = {
-            "timestamp": datetime.now().isoformat(),
-            "annotator": annotator,
-            "pair_id": row["id"],
-            "left_passage_bucket": st.session_state.bucket_choice if st.session_state.selection == "left" else ("Bucket 2" if st.session_state.bucket_choice == "Bucket 1" else "Bucket 1"),
-            "right_passage_bucket": st.session_state.bucket_choice if st.session_state.selection == "right" else ("Bucket 2" if st.session_state.bucket_choice == "Bucket 1" else "Bucket 1"),
-        }
-        st.session_state.history.append(new_row)
-        df_new = pd.DataFrame([new_row])
-        os.makedirs("results", exist_ok=True)
-        file_path = f"results/{annotator}_responses.csv"
-        df_new.to_csv(file_path, mode="a", header=not os.path.exists(file_path), index=False)
-        st.session_state.i += 1
-        st.session_state.selection = None
-        st.session_state.bucket_choice = None
+        save_and_advance()
 
 if st.button("Back"):
     if st.session_state.i > 0:
