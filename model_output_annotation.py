@@ -33,7 +33,6 @@ if i >= len(order):
     st.stop()
 
 row = df.loc[order[i]]
-
 flip = random.choice([True, False])
 passage_left = row["passage_a"] if not flip else row["passage_b"]
 passage_right = row["passage_b"] if not flip else row["passage_a"]
@@ -51,7 +50,9 @@ with col2:
 choice = st.radio("Which passage is better?", ["Left", "Right", "Same quality"], horizontal=True)
 
 if st.button("Next"):
-    if choice:
+    if not choice:
+        st.warning("Please select an option before proceeding.")
+    else:
         if choice == "Left":
             final_choice = "A" if not flip else "B"
         elif choice == "Right":
@@ -80,6 +81,4 @@ if st.button("Next"):
 
         st.session_state.i += 1
         st.experimental_rerun()
-    else:
-        st.warning("Please select an option before proceeding.")
 
