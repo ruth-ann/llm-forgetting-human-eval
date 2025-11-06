@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import random
 from datetime import datetime
-from github import Github
 import os
 
 st.set_page_config(page_title="Human Evaluation", layout="wide")
@@ -13,19 +12,25 @@ def load_data():
 
 df = load_data()
 
+def start_session():
+    name = st.session_state.name_input
+    if name:
+        st.session_state.annotator = "".join(name.split())[:8]
+        existing_file = f"results/{st.session_state.annotator}_responses.csv"
+        if os.path.exists(existing_file):
+            prev_df = pd.read_csv(existing_file)
+            st.session_state.i = len(prev_df)
+        else:
+            st.session_state.i = 0
+
 if "annotator" not in st.session_state:
-    name = st.text_input("Please enter your name or code and press Enter:")
-    if not name:
+    st.text_input(
+        "Please enter your name or code and press Enter:",
+        key="name_input",
+        on_change=start_session
+    )
+    if "annotator" not in st.session_state:
         st.stop()
-    st.session_state.annotator = "".join(name.split())[:8]
-    # check if previous progress exists
-    existing_file = f"results/{st.session_state.annotator}_responses.csv"
-    if os.path.exists(existing_file):
-        prev_df = pd.read_csv(existing_file)
-        st.session_state.i = len(prev_df)
-    else:
-        st.session_state.i = 0
-    st.stop()
 
 annotator = st.session_state.annotator
 
@@ -80,7 +85,6 @@ if st.button("Next"):
         df_new = pd.DataFrame([new_row])
         os.makedirs("results", exist_ok=True)
         file_path = f"results/{annotator}_responses.csv"
-        # append if exists
         df_new.to_csv(file_path, mode="a", header=not os.path.exists(file_path), index=False)
 
         st.session_state.i += 1
