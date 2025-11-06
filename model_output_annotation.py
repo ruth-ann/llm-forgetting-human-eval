@@ -19,7 +19,7 @@ if "annotator" not in st.session_state:
     if st.button("Start"):
         st.session_state.annotator = "".join(name.split())[:8]
         st.session_state.i = 0
-        st.experimental_rerun()
+        st.experimental_rerun()  # Only needed for first page initialization
     st.stop()
 
 annotator = st.session_state.annotator
@@ -32,7 +32,7 @@ order = list(df.index)
 random.shuffle(order)
 
 st.title("Human Evaluation Task")
-st.info("Click a bucket for the Left Passage; the Right Passage will be automatically assigned the opposite bucket.")
+st.info("Select a bucket for the Left Passage. The Right Passage will automatically get the opposite bucket. Press 'Next' to advance.")
 
 i = st.session_state.i
 if i >= len(order):
@@ -47,32 +47,30 @@ passage_right = row["passage_b"] if not flip else row["passage_a"]
 st.markdown(f"### Example {i+1} of {len(order)}")
 
 col1, col2 = st.columns(2)
-
 with col1:
     st.markdown("#### Left Passage")
     st.write(passage_left)
-    if st.button("Assign Left → Bucket 1", key=f"left1_{i}"):
-        final_left = "Bucket 1"
-        final_right = "Bucket 2"
-        save_and_advance(annotator, row["id"], final_left, final_right)
-
-    if st.button("Assign Left → Bucket 2", key=f"left2_{i}"):
-        final_left = "Bucket 2"
-        final_right = "Bucket 1"
-        save_and_advance(annotator, row["id"], final_left, final_right)
+    bucket_choice = st.radio("Assign to bucket:", ["Bucket 1", "Bucket 2"], horizontal=True)
 
 with col2:
     st.markdown("#### Right Passage")
     st.write(passage_right)
-    st.markdown("_Automatically assigned based on Left Passage selection_")
+    st.markdown("_Automatically assigned the opposite bucket_")
 
-def save_and_advance(annotator, pair_id, left_bucket, right_bucket):
+if st.button("Next"):
+    if not bucket_choice:
+        st.warning("Please select a bucket for the Left Passage before advancing.")
+        st.stop()
+
+    final_left = bucket_choice
+    final_right = "Bucket 2" if bucket_choice == "Bucket 1" else "Bucket 1"
+
     new_row = {
         "timestamp": datetime.now().isoformat(),
         "annotator": annotator,
-        "pair_id": pair_id,
-        "left_passage_bucket": left_bucket,
-        "right_passage_bucket": right_bucket,
+        "pair_id": row["id"],
+        "left_passage_bucket": final_left,
+        "right_passage_bucket": final_right,
     }
 
     df_new = pd.DataFrame([new_row])
