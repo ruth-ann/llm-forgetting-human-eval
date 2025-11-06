@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import random
-import uuid
 from datetime import datetime
 from github import Github
 
@@ -14,7 +13,11 @@ def load_data():
 df = load_data()
 
 if "annotator" not in st.session_state:
-    st.session_state.annotator = str(uuid.uuid4())[:8]
+    name = st.text_input("Please enter your name or code:")
+    if not name:
+        st.stop()
+    annotator = "".join(name.split())[:8]  # first 8 characters, no spaces
+    st.session_state.annotator = annotator
 annotator = st.session_state.annotator
 
 if "i" not in st.session_state:
@@ -33,6 +36,7 @@ if i >= len(order):
     st.stop()
 
 row = df.loc[order[i]]
+
 flip = random.choice([True, False])
 passage_left = row["passage_a"] if not flip else row["passage_b"]
 passage_right = row["passage_b"] if not flip else row["passage_a"]
@@ -70,15 +74,19 @@ if st.button("Next"):
         df_new = pd.DataFrame([new_row])
         file_path = f"results/{annotator}_responses.csv"
 
-        g = Github(st.secrets["GITHUB_TOKEN"])
-        repo = g.get_repo(st.secrets["REPO_NAME"])
-
         try:
-            repo_file = repo.get_contents(file_path)
-            repo.update_file(file_path, f"Update {annotator} responses", df_new.to_csv(index=False), repo_file.sha)
-        except:
-            repo.create_file(file_path, f"Add {annotator} responses", df_new.to_csv(index=False))
+            g = Github(st.secrets["GITHUB_TOKEN"])
+            repo = g.get_repo(st.secrets["REPO_NAME"])
 
-        st.session_state.i += 1
-        st.experimental_rerun()
+            try:
+                repo_file = repo.get_contents(file_path)
+                repo.update_file(file_path, f"Update {annotator} responses", df_new.to_csv(index=False), repo_file.sha)
+            except:
+                repo.create_file(file_path, f"Add {annotator} responses", df_new.to_csv(index=False))
+
+            st.session_state.i += 1
+            st.experimental_rerun()
+
+        except Exception as e:
+            st.error(f"Failed to save data to GitHub: {e}")
 
